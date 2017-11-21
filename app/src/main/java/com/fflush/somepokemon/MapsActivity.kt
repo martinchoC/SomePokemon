@@ -1,10 +1,16 @@
 package com.fflush.somepokemon
 
+import android.annotation.SuppressLint
+import android.content.Context
 import android.content.pm.PackageManager
+import android.location.Location
+import android.location.LocationListener
+import android.location.LocationManager
 import android.os.Build
-import android.support.v7.app.AppCompatActivity
+import android.support.v4.app.FragmentActivity
 import android.os.Bundle
 import android.support.v4.app.ActivityCompat
+import android.util.Log
 import android.widget.Toast
 
 import com.google.android.gms.maps.CameraUpdateFactory
@@ -15,10 +21,15 @@ import com.google.android.gms.maps.model.BitmapDescriptorFactory
 import com.google.android.gms.maps.model.LatLng
 import com.google.android.gms.maps.model.MarkerOptions
 
-class MapsActivity : AppCompatActivity(), OnMapReadyCallback {
+class MapsActivity : FragmentActivity(), OnMapReadyCallback  {
 
-    private lateinit var mMap: GoogleMap
-    var ACCESSLOCATION = 123
+    //WORK WITH USER LOCATION
+    private var mMap: GoogleMap? = null
+    var ACCESSLOCATION=123
+    var location:Location?=null
+    var oldLocation:Location?=null
+    var playerPower=0.0
+    var listPokemons=ArrayList<Pokemon>()
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -28,38 +39,59 @@ class MapsActivity : AppCompatActivity(), OnMapReadyCallback {
                 .findFragmentById(R.id.map) as SupportMapFragment
         mapFragment.getMapAsync(this)
 
-        checkPermision()
+        checkPermmison()
+        loadPokemon()
     }
 
-    fun checkPermision(){
+    fun checkPermmison(){
+
         if(Build.VERSION.SDK_INT>=23){
-            if(ActivityCompat.checkSelfPermission(this,
-                                                    android.Manifest.permission.ACCESS_FINE_LOCATION) != PackageManager.PERMISSION_GRANTED) {
+
+            if(ActivityCompat.
+                    checkSelfPermission(this,
+                            android.Manifest.permission.ACCESS_FINE_LOCATION)!=PackageManager.PERMISSION_GRANTED){
+
                 requestPermissions(arrayOf(android.Manifest.permission.ACCESS_FINE_LOCATION),ACCESSLOCATION)
                 return
             }
         }
-        getUserLocation()
+
+        GetUserLocation()
     }
 
-    fun getUserLocation(){
-        Toast.makeText(this,"User location access on", Toast.LENGTH_LONG).show()
+    fun GetUserLocation(){
+        Toast.makeText(this,"User location access on",Toast.LENGTH_LONG).show()
         //TODO: Will implement later
+
+        var myLocation= MylocationListener()
+
+        var locationManager=getSystemService(Context.LOCATION_SERVICE) as LocationManager
+
+        locationManager.requestLocationUpdates(LocationManager.GPS_PROVIDER,3,3f,myLocation)
+
+        var mythread=myThread()
+        mythread.start()
     }
 
     override fun onRequestPermissionsResult(requestCode: Int, permissions: Array<out String>, grantResults: IntArray) {
+
         when(requestCode){
+
             ACCESSLOCATION->{
-                if(grantResults[0]==PackageManager.PERMISSION_GRANTED) {
-                    getUserLocation()
-                }
-                else{
-                    Toast.makeText(this, "We cannot access your location", Toast.LENGTH_LONG).show()
+
+                if (grantResults[0]==PackageManager.PERMISSION_GRANTED){
+                    GetUserLocation()
+                }else{
+                    Toast.makeText(this,"We cannot access to your location",Toast.LENGTH_LONG).show()
                 }
             }
         }
+
         super.onRequestPermissionsResult(requestCode, permissions, grantResults)
     }
+
+
+
     /**
      * Manipulates the map once available.
      * This callback is triggered when the map is ready to be used.
@@ -71,14 +103,97 @@ class MapsActivity : AppCompatActivity(), OnMapReadyCallback {
      */
     override fun onMapReady(googleMap: GoogleMap) {
         mMap = googleMap
-
-        // Add a marker in Sydney and move the camera
-        val sydney = LatLng(-34.0, 151.0)
-        mMap.addMarker(MarkerOptions()
-                .position(sydney)
-                .title("Me") //details
-                .snippet("Here is my location") //more details
-                .icon(BitmapDescriptorFactory.fromResource(R.drawable.mario_bros))) //icon in my position
-        mMap.moveCamera(CameraUpdateFactory.newLatLngZoom(sydney, 14f))
     }
+
+
+    //Get user location
+
+    inner class MylocationListener:LocationListener{
+
+
+        constructor(){
+            location= Location("Start")
+            location!!.longitude=0.0
+            location!!.longitude=0.0
+        }
+        override fun onLocationChanged(p0: Location?) {
+            location=p0
+        }
+
+        override fun onStatusChanged(p0: String?, p1: Int, p2: Bundle?) {
+            //TODO("not implemented") //To change body of created functions use File | Settings | File Templates.
+        }
+
+        override fun onProviderEnabled(p0: String?) {
+            // TODO("not implemented") //To change body of created functions use File | Settings | File Templates.
+        }
+
+        override fun onProviderDisabled(p0: String?) {
+            //TODO("not implemented") //To change body of created functions use File | Settings | File Templates.
+        }
+
+    }
+
+    inner class myThread:Thread{
+        constructor():super(){
+            oldLocation= Location("Start")
+            oldLocation!!.longitude=0.0
+            oldLocation!!.longitude=0.0
+        }
+
+        override fun run(){
+            while (true){
+                try {
+                    if(oldLocation!!.distanceTo(location)==0f){
+                        continue
+                    }
+                    oldLocation=location
+                    runOnUiThread {
+                        mMap!!.clear()
+                        // show me
+                        val sydney = LatLng(location!!.latitude, location!!.longitude)
+                        mMap!!.addMarker(MarkerOptions()
+                                .position(sydney)
+                                .title("Me")
+                                .snippet(" here is my location")
+                                .icon(BitmapDescriptorFactory.fromResource(R.drawable.ash)))
+                        mMap!!.moveCamera(CameraUpdateFactory.newLatLngZoom(sydney, 14f))
+                        // show pokemons
+                        for(i in 0..listPokemons.size-1){
+                            var newPokemon=listPokemons[i]
+                            if(newPokemon.IsCatch==false){
+                                val pockemonLoc = LatLng(newPokemon.location!!.latitude, newPokemon.location!!.longitude)
+                                mMap!!.addMarker(MarkerOptions()
+                                        .position(pockemonLoc)
+                                        .title(newPokemon.name!!)
+                                        .snippet(newPokemon.des!! +", power:"+ newPokemon!!.power)
+                                        .icon(BitmapDescriptorFactory.fromResource(newPokemon.image!!)))
+
+                                if (location!!.distanceTo(newPokemon.location)<2){
+                                    newPokemon.IsCatch=true
+                                    listPokemons[i]=newPokemon
+                                    playerPower+=newPokemon.power!!
+                                    Toast.makeText(applicationContext,
+                                            "You catch new pockemon your new pwoer is " + playerPower,
+                                            Toast.LENGTH_LONG).show()
+                                }
+                            }
+                        }
+                    }
+                    Thread.sleep(1000)
+                }catch (ex:Exception){}
+            }
+        }
+    }
+
+    fun  loadPokemon(){
+        listPokemons.add(Pokemon(R.drawable.charmander,
+                "Charmander", "Charmander living in Bahia Blanca", 55.0, -38.7167, -62.2833))
+        listPokemons.add(Pokemon(R.drawable.bulbasaur,
+                "Bulbasaur", "Bulbasaur living in Bahia Blanca", 90.5, -38.7167, -62.2833))
+        listPokemons.add(Pokemon(R.drawable.squirtle,
+                "Squirtle", "Squirtle living in Bahia Blanca", 33.5, -38.7167, -62.2833))
+
+    }
+
 }
